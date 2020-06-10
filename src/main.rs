@@ -8,10 +8,16 @@ use piston::input::{
     Button, Key, PressEvent, ReleaseEvent, RenderArgs, RenderEvent, UpdateArgs, UpdateEvent,
 };
 use piston::window::WindowSettings;
-use std::process;
 
 use glutin_window::GlutinWindow;
 use opengl_graphics::{GlGraphics, OpenGL};
+
+#[derive(Clone, PartialEq, Copy)]
+enum Winner {
+    None,
+    Right,
+    Left,
+}
 
 pub struct App {
     gl_graphics: GlGraphics,
@@ -28,6 +34,7 @@ pub struct App {
     arena_width: f32,
     arena_height: f32,
     speed_factor: f32,
+    winner: Winner,
 }
 
 impl App {
@@ -36,6 +43,7 @@ impl App {
 
         use opengl_graphics::*;
         const BACKGROUND: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+        const VICTORY_BACKGROUND: [f32; 4] = [0.0, 0.2, 0.0, 1.0];
         const FOREGROUND: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
         const MIDDLE_LINE: [f32; 4] = [0.5, 0.5, 0.5, 1.0];
         const SCORE: [f32; 4] = [7.0, 7.0, 7.0, 1.0];
@@ -51,11 +59,50 @@ impl App {
         let ball_y = self.ball_y as f64;
         let left_score = &(self.left_score.to_string())[..];
         let right_score = &(self.right_score.to_string())[..];
+        let winner = self.winner;
 
         let mut glyph_cache =
             GlyphCache::new("assets/FiraSans-Regular.ttf", (), TextureSettings::new()).unwrap();
 
         self.gl_graphics.draw(args.viewport(), |c, gl| {
+            if winner != Winner::None {
+                clear(VICTORY_BACKGROUND, gl);
+                if winner == Winner::Left {
+                    text::Text::new_color(SCORE, 32)
+                        .draw(
+                            "Left wins!",
+                            &mut glyph_cache,
+                            &DrawState::default(),
+                            c.transform
+                                .trans(0.3 * args.window_size[0], 0.3 * args.window_size[1]),
+                            gl,
+                        )
+                        .unwrap();
+                } else {
+                    text::Text::new_color(SCORE, 32)
+                        .draw(
+                            "Right wins!",
+                            &mut glyph_cache,
+                            &DrawState::default(),
+                            c.transform
+                                .trans(0.3 * args.window_size[0], 0.3 * args.window_size[1]),
+                            gl,
+                        )
+                        .unwrap();
+                }
+
+                text::Text::new_color(SCORE, 32)
+                    .draw(
+                        "Press Esc to quit, R to restart",
+                        &mut glyph_cache,
+                        &DrawState::default(),
+                        c.transform
+                            .trans(0.2 * args.window_size[0], 0.7 * args.window_size[1]),
+                        gl,
+                    )
+                    .unwrap();
+                return;
+            }
             clear(BACKGROUND, gl);
 
             rectangle(FOREGROUND, left, c.transform.trans(-40.0, left_pos), gl);
@@ -99,6 +146,9 @@ impl App {
     }
 
     fn update(&mut self, _args: &UpdateArgs) {
+        if self.winner != Winner::None {
+            return;
+        }
         if (self.left_vel == 1 && self.left_pos < self.arena_height - 50.0)
             || (self.left_vel == -1 && self.left_pos >= 1.0)
         {
@@ -115,8 +165,9 @@ impl App {
             if self.ball_y < self.right_pos || self.ball_y > self.right_pos + 50.0 {
                 self.left_score += 1;
                 if self.left_score >= 5 {
-                    print!("Left wins!");
-                    process::exit(0);
+                    println!("Left wins!");
+                    self.reset_state();
+                    self.winner = Winner::Left;
                 }
                 self.ball_x = self.arena_width / 2.0;
                 self.ball_y = self.arena_height / 2.0;
@@ -127,8 +178,9 @@ impl App {
             if self.ball_y < self.left_pos || self.ball_y > self.left_pos + 50.0 {
                 self.right_score += 1;
                 if self.right_score >= 5 {
-                    print!("Right wins!");
-                    process::exit(0);
+                    println!("Right wins!");
+                    self.reset_state();
+                    self.winner = Winner::Right;
                 }
                 self.ball_x = self.arena_width / 2.0;
                 self.ball_y = self.arena_height / 2.0;
@@ -156,6 +208,41 @@ impl App {
                 Key::S => {
                     self.left_vel = 1;
                 }
+                Key::R => {
+                    if self.winner != Winner::None {
+                        self.reset_state();
+                    }
+                }
+                Key::D1 | Key::NumPad1 => {
+                    self.speed_factor = 1.0;
+                }
+                Key::D2 | Key::NumPad2 => {
+                    self.speed_factor = 2.0;
+                }
+                Key::D3 | Key::NumPad3 => {
+                    self.speed_factor = 3.0;
+                }
+                Key::D4 | Key::NumPad4 => {
+                    self.speed_factor = 4.0;
+                }
+                Key::D5 | Key::NumPad5 => {
+                    self.speed_factor = 5.0;
+                }
+                Key::D6 | Key::NumPad6 => {
+                    self.speed_factor = 6.0;
+                }
+                Key::D7 | Key::NumPad7 => {
+                    self.speed_factor = 7.0;
+                }
+                Key::D8 | Key::NumPad8 => {
+                    self.speed_factor = 8.0;
+                }
+                Key::D9 | Key::NumPad9 => {
+                    self.speed_factor = 9.0;
+                }
+                Key::D0 | Key::NumPad0 => {
+                    self.speed_factor = 0.0;
+                }
                 _ => {}
             }
         }
@@ -180,11 +267,26 @@ impl App {
             }
         }
     }
+
+    fn reset_state(&mut self) {
+        self.left_score = 0;
+        self.left_pos = 1.0;
+        self.left_vel = 0;
+        self.right_score = 0;
+        self.right_pos = 1.0;
+        self.right_vel = 0;
+        self.ball_x = 0.0;
+        self.ball_y = 0.0;
+        self.vel_x = 1;
+        self.vel_y = 1;
+        // self.speed_factor = 2.0;
+        self.winner = Winner::None;
+    }
 }
 
 fn main() {
     let opengl = OpenGL::V3_2;
-    let mut window: GlutinWindow = WindowSettings::new("Pong", [512, 342])
+    let mut window: GlutinWindow = WindowSettings::new("Rusty Pong", [512, 342])
         .graphics_api(opengl)
         .exit_on_esc(true)
         .build()
@@ -202,9 +304,10 @@ fn main() {
         ball_y: 0.0,
         vel_x: 1,
         vel_y: 1,
-        speed_factor: 1.7,
+        speed_factor: 2.0,
         arena_height: 0.0,
         arena_width: 0.0,
+        winner: Winner::None,
     };
 
     let mut events = Events::new(EventSettings::new());
